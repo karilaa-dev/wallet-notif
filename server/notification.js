@@ -38,5 +38,6 @@ export function transferNotification(event) {
   const validHash = net?.family === "evm" ? /^0x[\da-f]{64}$/i : /^[\da-f]{64}$/i;
   const transactionUrl = net && validHash.test(transaction) ? explorers[network] + transaction : null;
   if (!transactionUrl) lines.push("Transaction " + transaction);
+  if (event.comment) lines.push("💬 Comment: " + event.comment);
   return { message: lines.join("\n"), transactionUrl };
 }

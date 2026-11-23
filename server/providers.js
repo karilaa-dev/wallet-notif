@@ -1,3 +1,4 @@
+import { isUtf8 } from "node:buffer";
 import { createHash } from "node:crypto";
 import { normalize } from "./networks.js";
 import { defaultSource } from "./sources.js";
@@ -149,6 +150,14 @@ function units(raw, decimals) {
   const fraction = s.slice(-d).replace(/0+$/, "");
   return s.slice(0, -d) + (fraction ? "." + fraction : "");
 }
+function tronMemo(hex) {
+  if (typeof hex !== "string" || !/^(?:[\da-f]{2})+$/i.test(hex)) return;
+  const bytes = Buffer.from(hex, "hex");
+  if (!isUtf8(bytes)) return;
+  const text = bytes.toString("utf8");
+  if (!/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(text)) return text;
+}
+
 export function rowTime(family, row) {
   const value =
     family === "evm"
@@ -172,8 +181,7 @@ export function decode(net, wallet, feed, row, occurrences = new Map()) {
     to,
     value,
     decimals,
-    asset = "native",
-    symbol = net.symbol,
+    { asset = "native", symbol = net.symbol, comment } = {},
   ) {
     const sender = from ? normalize(net.family, from) : null;
     const receiver = to ? normalize(net.family, to) : null;
@@ -190,6 +198,9 @@ export function decode(net, wallet, feed, row, occurrences = new Map()) {
       transaction: tx,
       id: tx + ":" + part,
       direction,
+      ...(direction === "received" && typeof comment === "string" && comment.trim()
+        ? { comment }
+        : {}),
       from: sender,
       to: receiver,
       asset,
@@ -265,8 +276,10 @@ export function decode(net, wallet, feed, row, occurrences = new Map()) {
         to,
         row.total.value,
         row.total.decimals ?? row.token.decimals,
-        normalize("evm", row.token.address_hash ?? row.token.address),
-        row.token.symbol,
+        {
+          asset: normalize("evm", row.token.address_hash ?? row.token.address),
+          symbol: row.token.symbol,
+        },
       );
     }
   } else if (net.family === "ton") {
@@ -282,6 +295,7 @@ export function decode(net, wallet, feed, row, occurrences = new Map()) {
           t.recipient.address,
           t.amount,
           9,
+          { comment: t.comment },
         );
       if (a.type === "JettonTransfer")
         transfer(
@@ -291,8 +305,11 @@ export function decode(net, wallet, feed, row, occurrences = new Map()) {
           t.recipient?.address,
           t.amount,
           t.jetton.decimals,
-          normalize("ton", t.jetton.address),
-          t.jetton.symbol,
+          {
+            asset: normalize("ton", t.jetton.address),
+            symbol: t.jetton.symbol,
+            comment: t.comment,
+          },
         );
     });
   } else if (feed === "internal-transactions") {
@@ -334,15 +351,15 @@ export function decode(net, wallet, feed, row, occurrences = new Map()) {
       row.to,
       row.value,
       row.token_info.decimals,
-      asset,
-      row.token_info.symbol,
+      { asset, symbol: row.token_info.symbol },
     );
   } else {
+    const comment = tronMemo(row.raw_data.data);
     row.raw_data.contract.forEach((contract, i) => {
       if ((row.ret?.[i] ?? row.ret?.[0])?.contractRet !== "SUCCESS") return;
       const t = contract.parameter.value;
       if (contract.type === "TransferContract")
-        transfer(row.txID, i, t.owner_address, t.to_address, t.amount, 6);
+        transfer(row.txID, i, t.owner_address, t.to_address, t.amount, 6, { comment });
       if (contract.type === "TriggerSmartContract" && t.call_value)
         transfer(
           row.txID,
@@ -351,6 +368,7 @@ export function decode(net, wallet, feed, row, occurrences = new Map()) {
           t.contract_address,
           t.call_value,
           6,
+          { comment },
         );
     });
   }

@@ -147,8 +147,18 @@ test("TON Center and TRONSCAN use confirmed transfer schemas and native paginati
           sender: raw,
           receiver: ton.usdt,
           amount: "1000000",
+          comment: "Jetton memo",
         },
       },
+      ...[false, true].map((encrypted) => ({
+        type: "ton_transfer",
+        trace_id: Buffer.from(tx, "hex").toString("base64"),
+        action_id: "native",
+        finality: "finalized",
+        success: true,
+        start_utime: 100,
+        details: { source: raw, destination: ton.usdt, value: "1", comment: "TON memo", is_encrypted_comment: encrypted },
+      })),
     ],
     metadata: {
       [ton.usdt]: {
@@ -175,6 +185,9 @@ test("TON Center and TRONSCAN use confirmed transfer schemas and native paginati
   const [event] = decode(ton, ton.usdt, "events", result.rows[0]);
   assert.equal(event.transaction, tx);
   assert.equal(event.amount, "1");
+  assert.equal(event.comment, "Jetton memo");
+  assert.equal(decode(ton, ton.usdt, "events", result.rows[1])[0].comment, "TON memo");
+  assert.equal(decode(ton, ton.usdt, "events", result.rows[2])[0].comment, undefined);
   assert.equal(result.next, "opaque");
   assert.equal(
     decode(ton, ton.usdt, "events", { ...result.rows[0], in_progress: true })

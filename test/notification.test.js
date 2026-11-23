@@ -14,11 +14,12 @@ const ton = {
 const link = "https://tonviewer.com/transaction/" + hash;
 
 test("TON alerts show a compact friendly address and a transaction action across destinations", async () => {
+  const event = { ...ton, comment: "Invoice #42 🧾" };
   const friendly = Address.parse(wallet).toString({ bounceable: false });
-  const text = "📥 Received 0.599 TON\n👛 Wallet " + friendly.slice(0, 8) + "…" + friendly.slice(-6);
+  const text = "📥 Received 0.599 TON\n👛 Wallet " + friendly.slice(0, 8) + "…" + friendly.slice(-6) + "\n💬 Comment: Invoice #42 🧾";
   for (const type of ["ntfy", "telegram", "webhook"]) {
     const dest = { name: "Inbox", type, config: { topic: "inbox", chatId: "123" } };
-    const row = { id: "row", payload: JSON.stringify(ton), summary: "old notification format" };
+    const row = { id: "row", payload: JSON.stringify(event), summary: "old notification format" };
     await deliver(dest, row, async (_, opts) => {
       const body = JSON.parse(opts.body);
       if (type === "ntfy") {
@@ -29,7 +30,7 @@ test("TON alerts show a compact friendly address and a transaction action across
         assert.equal(body.text, text);
         assert.deepEqual(body.reply_markup.inline_keyboard, [[{ text: "View transaction", url: link }]]);
       } else {
-        assert.deepEqual(body, { deliveryId: "row", destination: "Inbox", ...ton, message: text, transactionUrl: link });
+        assert.deepEqual(body, { deliveryId: "row", destination: "Inbox", ...event, message: text, transactionUrl: link });
       }
       return Response.json({ ok: true });
     });
@@ -58,4 +59,22 @@ test("every supported network has an explorer and invalid identifiers never beco
   const result = transferNotification({ ...ton, transaction: "unexpected-id" });
   assert.equal(result.transactionUrl, null);
   assert.match(result.message, /Transaction unexpected-id/);
+});
+
+test("long Unicode comments fit the push destination and stay complete in webhooks", async () => {
+  const event = { ...ton, comment: "🧾".repeat(4200) };
+  for (const type of ["ntfy", "telegram", "webhook"]) {
+    await deliver({ name: "Inbox", type, config: {} }, { payload: JSON.stringify(event) }, async (_, opts) => {
+      const body = JSON.parse(opts.body);
+      const text = body.message ?? body.text;
+      if (type === "webhook") {
+        assert.ok(text.endsWith(event.comment));
+        assert.equal(body.comment, event.comment);
+      } else {
+        assert.ok(text.endsWith("🧾…"));
+        assert.ok(type === "ntfy" ? Buffer.byteLength(text) <= 4096 : Array.from(text).length === 4096);
+      }
+      return Response.json({ ok: true });
+    });
+  }
 });

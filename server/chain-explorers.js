@@ -26,6 +26,7 @@ export async function toncenterPage(wallet, cursor, since, source, read) {
           sender: { address: d.source },
           recipient: { address: d.destination },
           amount: d.value,
+          comment: d.is_encrypted_comment ? undefined : d.comment,
         },
       };
     if (a.type === "jetton_transfer") {
@@ -38,6 +39,7 @@ export async function toncenterPage(wallet, cursor, since, source, read) {
           sender: { address: d.sender },
           recipient: { address: d.receiver },
           amount: d.amount,
+          comment: d.is_encrypted_comment ? undefined : d.comment,
           jetton: {
             address: d.asset,
             decimals: info?.extra?.decimals,
@@ -144,6 +146,7 @@ export async function tronscanPage(wallet, feed, cursor, since, source, read) {
       txID: r.hash,
       ret: [{ contractRet: ok ? r.contractRet : "failed" }],
       raw_data: {
+        data: r.data,
         contract: type ? [{ type, parameter: { value: r.contractData } }] : [],
       },
     };

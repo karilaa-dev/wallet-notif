@@ -3,6 +3,14 @@ import { transferNotification } from "./notification.js";
 
 const MAX_RETRY_MS = 3600000;
 
+// ntfy limits message size in bytes. Preserve complete UTF-8 characters.
+function ntfyText(text) {
+  const bytes = Buffer.from(text);
+  if (bytes.length <= 4096) return text;
+  const prefix = new TextDecoder().decode(bytes.subarray(0, 4093), { stream: true });
+  return prefix + "…";
+}
+
 export async function deliver(dest, row, send = fetch) {
   const c = dest.config,
     event = JSON.parse(row.payload);
@@ -23,7 +31,7 @@ export async function deliver(dest, row, send = fetch) {
         topic: c.topic,
         priority: c.priority,
         title: dest.name,
-        message: text,
+        message: ntfyText(text),
       };
       if (link) {
         body.click = link;
@@ -34,6 +42,10 @@ export async function deliver(dest, row, send = fetch) {
     case "telegram":
       url = "https://api.telegram.org/bot" + c.botToken + "/sendMessage";
       body = { chat_id: c.chatId, text };
+      if (text.length > 4096) {
+        const characters = Array.from(text);
+        if (characters.length > 4096) body.text = characters.slice(0, 4095).join("") + "…";
+      }
       if (link) {
         body.reply_markup = {
           inline_keyboard: [[{ text: "View transaction", url: link }]],

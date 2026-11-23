@@ -153,6 +153,7 @@ test("TON friendly addresses, in-progress events and mixed action outcomes", () 
     JettonTransfer: {
       recipient: { address },
       amount: "4000000",
+      comment: "Transfer #1",
       jetton: { address, decimals: 6, symbol: "USDT" },
     },
   };
@@ -173,6 +174,7 @@ test("TON friendly addresses, in-progress events and mixed action outcomes", () 
     ]),
     [["hash:1", "received", "4"]],
   );
+  assert.equal(decode(net, address, "events", row)[0].comment, "Transfer #1");
 });
 
 test("TRON ignores approvals, distinguishes identical logs and decodes contract-sent TRX", () => {
@@ -219,6 +221,24 @@ test("TRON ignores approvals, distinguishes identical logs and decodes contract-
     decode(net, address, "internal-transactions", data)[0].amount,
     "1.111111",
   );
+});
+
+test("native TRX transfers include incoming text memos and ignore binary data", () => {
+  const net = byId.get("tron"), sender = "TNUC9Qb1rRpS5CbWLmNMxXBjyFoydXjWFR";
+  function transfer(wallet, data) {
+    return decode(net, wallet, "transactions", {
+      txID: "tx", block_timestamp: start, ret: [{ contractRet: "SUCCESS" }],
+      raw_data: { data, contract: [{
+        type: "TransferContract", parameter: { value: { owner_address: sender, to_address: net.usdt, amount: 1 } },
+      }] },
+    })[0];
+  }
+  const memo = Buffer.from("Invoice 🧾").toString("hex");
+  assert.equal(transfer(net.usdt, memo).comment, "Invoice 🧾");
+  assert.equal(transfer(sender, memo).comment, undefined);
+  for (const value of [undefined, "", "invalid", "00", "ff", "20"]) {
+    assert.equal(transfer(net.usdt, value).comment, undefined);
+  }
 });
 
 test("BTC reports net movement once and ignores unconfirmed changes", () => {
