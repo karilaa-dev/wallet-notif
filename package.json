@@ -1,0 +1,20 @@
+{
+  "name": "wallet-notif",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "npm --prefix client ci && npm --prefix client run build",
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@scure/base": "2.4.0",
+    "@ton/core": "0.63.1",
+    "bitcoinjs-lib": "7.0.5",
+    "express": "5.3.0"
+  }
+}
